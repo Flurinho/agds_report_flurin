@@ -1,0 +1,473 @@
+---
+title: "adgs_report_flurin.Rmd"
+author: "Flurin"
+date: "2023-02-27"
+output:
+  html_document: default
+  toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+```
+
+# Report Exercises Applied Geo Data Science FS23 UNIBE Flurin Joos
+
+## 3.5 Report Exercise Cleaning data from elevated CO2 experiments
+
+In this exercise we worked with the dataset "Database S1" from the Paper "Groenigen, Kees Jan van, Xuan Qi, Craig W. Osenberg, Yiqi Luo, and Bruce A. Hungate."Faster Decomposition Under Increased Atmospheric CO2 Limits Soil Carbon Storage." Science 344, no. 6183 (May 2, 2014): 508--9. <https://doi.org/10.1126/science.1249534>." The dataset contains data of soil organic measurements from different experiments.
+
+Firstly I cleaned the data inside Excel manually. This is not further elaborated here. Then I saved the Excel file as a CSV file and read it into R. To be able to read the CSV file in R i had to replace the Semicolons (;), that were defined by Excel as List Separator, with commas (,). I did this using the search and replace function in Windows Editor. Other possible Solutions like defining the List Separotor as a Semicolon inside of the R Studio interface ( using the function `sep= ;`), did not work.
+
+I loaded the tidyverse into the library, which were going to use in all the Exercises.
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+The following reads the CSV file that we previosly cleaned by hand, into R Studio and saved it as a dataframe with the name "database S1". Further the argument `col_names = TRUE` defines the first row as Collumnnames.
+
+```{r}
+database_S1 <- readr::read_csv("./data/1249534s1-s6_txt.csv",
+            col_names = TRUE)
+```
+
+First we want to calculate the log response ratio, which is the treatment effect on variable X, within each experiment. The function `aggregate` allow us to take the mean of the variables for each experiment. Yet it only takes the mean for numeric or integer variables. Variables with the class character are automatically replaced with NA.
+
+```{r}
+mean_experiment <- aggregate(database_S1,  
+                by = list(database_S1$Experiment),  
+                FUN = mean)
+```
+
+The following calculates the log response ratio for each Experiment. Here we use the pipe operator `|>`, which takes the object on its left side as the first argument of the function to the right side of it. We calculate the Log Response Ration using the means for each experiment, which we've just calculated. We Group them by "Group.1", which is a newly created column by the previous function and holds a copie of the Variable "Experiment"
+
+```{r}
+LRR_experiment <- mean_experiment |>  
+                      group_by(Group.1) |>   
+                      summarise ( RR = log( `increased CO2 in g C m-2 (mean)`/ `ambient CO2 in g C m-2  (mean)` ))
+```
+
+In the next step we aggregate data for different years since the start of the Experiment. We distinguish the Experiments in 3 diffferent phases. The early phase (\<3 years since start), the mid-phase (3-6 years since start), and the late phase (\>6 years since start). Then we calculate the Log Response-Ratios for each Phase.
+
+First we calculate the Log response Ratio for the early phase and then repeat the same functions for the other 2 phases. We select a dataframe "earlyphase" out of the dataframe "database_S1", which only includes the samples that are part of the previously definded earlyphase.
+
+```{r}
+earlyphase <- database_S1[database_S1[,"Time (years)"] >= 0 & database_S1[,"Time (years)"]<= 3,]
+```
+
+Then we calculate the Log Response Ratio for each sample that is part of the earlyphase. Again we use the pipe operator which has different advantages.
+
+```{r}
+LRR_03 <- earlyphase |>  
+                    group_by(`Time (years)`)  |>  
+                    summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))
+```
+
+In a last step we have to take the mean of every Sample\`s Log Response Ratio. Since the dataframe "LRR_03" has extra rows which are empty we have to make shure that objects with no value are ignored. We do this using the function `na.rm=TRUE`
+
+```{r}
+mean(LRR_03$RR, na.rm=TRUE)  # Log response Ratio early phase = 0.01504443
+```
+
+We repeat the same process with the midphase and latephase, only changing the samples selected and the names of the newly created dataframes.
+
+```{r}
+midphase <- database_S1[database_S1[,"Time (years)"] >= 3 & database_S1[,"Time (years)"]<= 6,]  
+
+LRR_36 <- midphase |>  
+  group_by(`Time (years)`)  |>  
+  summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))  
+
+mean(LRR_36$RR, na.rm = TRUE)  # Log response Ratio mid phase phase = 0.01723058
+
+latephase <- database_S1[database_S1[,"Time (years)"] >= 6,]  
+
+LRR_6 <- latephase |>  
+  group_by(`Time (years)`)  |>  
+  summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))  
+
+mean(LRR_6$RR, na.rm = TRUE)  # Log response Ratio late phase phase = -0.01990375```
+
+```
+
+## 4.4 Report Exercise Telling a Story from Data
+
+In this Excercise I will research the Impact of Ozone on Temperature using the dataset Airquality which is directly available in R. My Hypotheses is that if there is more measured Ozone the Temperature is higher within a month. Airquality is a dataset containing daily air quality measurements from New York from the year 1973. It contains 153 observations on the 6 variables Ozone (measured in ppb), numeric Solar Radiation (measured in Langleys), Average Wind Speed (measured in miles per hour) and the Maximum daily Temperature (measured in Fahrenheit).
+
+```{r}
+# load dataframe airquality
+airqualityFahrenheit <- datasets::airquality
+# look at dataframe
+head(airquality)
+str(airquality)
+summary(airquality)
+?airquality
+
+#converts the Tempretures measured in Fahrenheit to Celsius and saves it in new Dataframe
+airquality <- airqualityFahrenheit |>
+  dplyr::mutate (Temp = ((Temp - 32)/1.8))
+```
+
+I choose the standart deviation, the maximum and the minimum as statistical metrics. First of all those metrics give a good overview of how the relevant data looks like and how its distributed. The temprature changed quite a lot, in the time span of mai to september but is still in a area that i would expect for New York . By looking at the mean, max and min of the Ozone concentration i see that the maximum concentration is quite an extreme since its much further away from the mean than the minimum number.
+
+```{r}
+mean(airquality$Ozone, na.rm = T)
+max(airquality$Ozone, na.rm = T)
+min(airquality$Ozone, na.rm = T)
+
+mean(airquality$Temp, na.rm = T)
+max(airquality$Temp, na.rm = T)
+min(airquality$Temp, na.rm = T)
+
+```
+
+I created the graphic presenting the changes in tempreture and ozone from mai to september with the following code.
+
+```{r}
+library(lubridate)
+library(ggplot2)
+#creates a new column in airquality with the dates 
+airquality <-airquality |>
+  dplyr::mutate("date" = make_date(year = 1973, month = airquality$Month, day = airquality$Day))
+#creates a new column with the day of year in airquality
+airquality <-airquality |>
+  dplyr::mutate("doy" = yday(airquality$date) )
+# creates a cartesian plot that shows the seasonal cycle of Ozone
+plot_1 <-ggplot2::ggplot(
+  data = airquality,
+  aes ( x = doy,
+       y =Ozone)) + 
+  geom_line() + 
+  labs(y = expression(paste("Ozone")),
+       x = "Day of year")
+# creates a cartesian plot that shows the seasonal cycle of the Tempreture
+plot_2 <- ggplot2::ggplot(
+  data = airquality,
+  aes ( x = doy,
+        y = Temp)) + 
+  geom_line() + 
+  labs(y = expression(paste("Temp")),
+       x = "Day of year")
+# combines the 2 plots 
+cowplot::plot_grid(plot_1, plot_2, ncol = 1)
+```
+
+By comparing the to graphics I see that my Hypotheses could be True. There is a clear positive correlation between the Temperature and the Ozone Concentration. The Maximum is in both graphics around Day of the Year 240 and the minimum around Day of the Year 140. Although it is interesting to see, that approximatly from day 170 until day 230, the Ozone Concentration changes quite fast and with big magnitude while the Temperature was relative constant.
+
+```{r}
+# Linear Regression by Month
+airquality_m <- airquality |>
+  dplyr::mutate(month = as.factor(Month))
+
+ggplot(
+  data = airquality_m,
+  aes(x = Ozone,
+      y = Temp, color = month))+
+  geom_point(alpha = 0.5) +
+  geom_smooth(formula = y ~ x + 0, method = "lm", se = FALSE) +
+  labs(x = expression(paste("Ozone (ppb)")), 
+       y = expression(paste("Temp (C°)"))) +
+  theme_classic()+
+  scico::scale_color_scico_d(palette = "bamako")
+
+
+
+```
+
+The Graphic above shows the linear regression by month between the Temperature and Ozone concentration and also a scatter plot. The lines created by `geom_smooth(formula = y ~ x + 0, method = "lm", se = FALSE)`
+
+have a positive gradient which means the correlation is positive. That supports my Hypotheses.
+
+```{r}
+# Outliers
+vec_outliers <- boxplot.stats(airquality$Ozone)$out
+
+plot_data <- airquality |> 
+  dplyr::mutate(outlier = Ozone %in% vec_outliers)
+
+plot_data |> 
+  ggplot(aes(x = Temp, y = Ozone, color = outlier)) + 
+  geom_point() + 
+  scale_color_manual("Outlier?",                    # Set title of legend
+                     values = c("black", "red"),    # Highlight in red
+                     labels= c("No", "Yes")        # Add labels to the legend
+  ) +
+  labs(x = expression(paste("Temperature (C°)")), 
+       y = expression(paste("Ozone (ppb)")) +
+  theme_classic())
+
+```
+
+In the Graphic above i've plotted the Ozone Concentration vs Temperature once again and defined Outliers. Here, Outliers are defined as those values of `Ozone` that fall outside (Q1−1.5(Q3−Q1) to Q3+1.5(Q3−Q1). We see that there are only 2 Outliers, all the other datapoints fall inside the main pointcloud. That is good news, because Outliers could affect further analysis or models in a disproportionate way.
+
+We have to be carfull with the interpretation of our Results. The Ozone Concentration measurements and Temperature measurments were not taken in measured in different places. The Ozone has been measured at Roosevelt Island and the Temperature at La Guardia Airport. Those places lay approximatly 8 km away from each other. Further the Solar Radiation and also Cloud Coverager are not included in the Analyses which both impact the Temperature. My Hypotheses that the Ozone Concentration and Temperature have a positive more or less linear Correlation is True. We got similar Results from comparing the data visually and also using the linear Regression. Although by looking at the scatterplot, I would say that the linear Regression Lines overestimate the positivy of the correlation and perhaps also the linearity.
+
+## 8.5 Report Exercise stepwise forward Regression
+
+```{r include=FALSE}
+#load necessary packages
+library(ggplot2)
+
+#load data into R as a csv
+half_hourly_fluxes <- readr::read_csv("./data/df_for_stepwise_regression.csv")
+
+#exploritary data analysis
+summary(half_hourly_fluxes)
+```
+
+### bivariate models (single predictor)
+
+```{r}
+#Regression for 1-3
+
+r_2_values <- c()
+for (predictor in predictors) {
+  formel <- formula(paste("GPP_NT_VUT_REF ~", predictor))
+  model <- lm(formel, data = half_hourly_fluxes)
+  summary_model <- summary(model)
+  print(summary_model)
+  r_squared <- summary_model$r.squared
+  r_2_values <- c(r_2_values, r_squared)
+  print(r_2_values)
+}
+
+```
+
+#### evaluation
+
+```{r}
+best_r_2 <- which.max(r_2_values)
+best_name <- predictors[best_r_2]
+best_formel <- formula(paste("GPP_NT_VUT_REF ~", best_name))
+best_model <- lm(best_formel, data = half_hourly_fluxes)
+best_aic <- AIC(best_model)
+
+print(r_2_values)
+cat("lowest AIC:", best_aic,
+    "variable:", best_name)
+```
+
+### Implementation stepwise forward regression
+
+```{r}
+#Stepwise Linear Regression
+
+response <- half_hourly_fluxes$GPP_NT_VUT_REF
+factors <- c("TA_F","SW_IN_F","LW_IN_F","VPD_F","PA_F","P_F","WS_F","TA_F_MDS","SW_IN_F_MDS","LW_IN_F_MDS","VPD_F_MDS","CO2_F_MDS","PPFD_IN","GPP_NT_VUT_REF","USTAR")
+
+
+small_aic <- Inf
+best_modell <- NULL
+
+for(i in 1:14) {
+  combinations <- combn(factors, i)
+    print(combinations)
+  for (j in 1:ncol(combinations)){
+    formel_all_p <- formula(paste("GPP_NT_VUT_REF ~", paste(combinations)))
+    modell_lm <- lm(formel_all_p, data = half_hourly_fluxes)
+    aic <- AIC(modell_lm)
+    if( aic < small_aic){
+      small_aic <- aic
+      best_modell <- modell_lm
+    } else {
+      break
+    }
+  }
+}
+summary(best_modell)
+print(small_aic)
+print(best_modell)
+```
+
+#### evaluation
+
+## 9.4 Supervised Machine Learning 1
+### Comparison of linear regression and KNN models
+
+#### fitting and evaluating the models
+
+```{r}
+#load necesarry packages
+library(ggplot2)
+library(dbplyr)
+library(tidyr)
+library(caret)
+library(recipes)
+
+#import data
+daily_fluxes <- readr::read_csv("./FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")
+# Data cleaning: looks ok, no obviously bad data
+# no long tail, therefore no further target engineering
+#create Histogram
+daily_fluxes |> 
+  ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
+  geom_histogram()
+```
+
+```{r}
+
+
+# Data splitting
+set.seed(13)  # for reproducibility
+split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
+daily_fluxes_train <- rsample::training(split)
+daily_fluxes_test <- rsample::testing(split)
+
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+# Fit linear regression model
+mod_lm <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "lm",
+  trControl = caret::trainControl(method = "none"),
+  metric = "RMSE"
+)
+
+# Fit KNN model
+mod_knn <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+```
+
+```{r}
+# make model evaluation into a function to reuse code
+eval_model <- function(mod, df_train, df_test){
+  
+  # add predictions to the data frames
+  df_train <- df_train |> 
+    drop_na()
+  df_train$fitted <- predict(mod, newdata = df_train)
+  
+  df_test <- df_test |> 
+    drop_na()
+  df_test$fitted <- predict(mod, newdata = df_test)
+  
+  # get metrics tables
+  metrics_train <- df_train |> 
+    yardstick::metrics(GPP_NT_VUT_REF, fitted)
+  
+  metrics_test <- df_test |> 
+    yardstick::metrics(GPP_NT_VUT_REF, fitted)
+  
+  # extract values from metrics tables
+  rmse_train <- metrics_train |> 
+    filter(.metric == "rmse") |> 
+    pull(.estimate)
+  rsq_train <- metrics_train |> 
+    filter(.metric == "rsq") |> 
+    pull(.estimate)
+  
+  rmse_test <- metrics_test |> 
+    filter(.metric == "rmse") |> 
+    pull(.estimate)
+  rsq_test <- metrics_test |> 
+    filter(.metric == "rsq") |> 
+    pull(.estimate)
+  
+  # visualise as a scatterplot
+  # adding information of metrics as sub-titles
+  plot_1 <- ggplot(data = df_train, aes(GPP_NT_VUT_REF, fitted)) +
+    geom_point(alpha = 0.3) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
+    labs(subtitle = bquote( italic(R)^2 == .(format(rsq_train, digits = 2)) ~~
+                            RMSE == .(format(rmse_train, digits = 3))),
+         title = "Training set") +
+    theme_classic()
+  
+  plot_2 <- ggplot(data = df_test, aes(GPP_NT_VUT_REF, fitted)) +
+    geom_point(alpha = 0.3) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
+    labs(subtitle = bquote( italic(R)^2 == .(format(rsq_test, digits = 2)) ~~
+                            RMSE == .(format(rmse_test, digits = 3))),
+         title = "Test set") +
+    theme_classic()
+  
+  out <- cowplot::plot_grid(plot_1, plot_2)
+  
+  return(out)
+}
+
+# linear regression model
+eval_model(mod = mod_lm, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+```
+
+## 10.4 Supervised Machine Learning 2
+
+```{r}
+#load necesarry packages
+library(ggplot2)
+library(dbplyr)
+library(tidyr)
+library(caret)
+library(recipes)
+library(lubridate)
+
+#import data, convert to nice date object, set all -9999 to NA
+davos_daily_fluxes <- readr::read_csv("./FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")|>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  mutate(across(where(is.numeric), ~na_if(., -9999)))
+  
+laegern_daily_fluxes <- readr::read_csv("./FLX_CH-Lae_FLUXNET2015_FULLSET_DD_2004-2014_1-4.csv")|>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  mutate(across(where(is.numeric), ~na_if(., -9999)))
+```
+
+```{r}
+# Data splitting for Davos
+set.seed(112)  # for reproducibility
+davos_split <- rsample::initial_split(davos_daily_fluxes, prop = 0.8)
+davos_daily_fluxes_train <- rsample::training(davos_split)
+davos_daily_fluxes_test <- rsample::testing(davos_split)
+
+# Data splitting for Laegern
+set.seed(115)  # for reproducibility
+laegern_split <- rsample::initial_split(laegern_daily_fluxes, prop = 0.8)
+laegern_daily_fluxes_train <- rsample::training(laegern_split)
+laegern_daily_fluxes_test <- rsample::testing(laegern_split)
+```
+
+```{r}
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp_davos <- recipes::recipe(GPP_NT_VUT_REF ~. , 
+                      data = davos_daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+pp_laegern <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                            data = laegern_daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+```
+
+```{r}
+# Across-site predictions from Davos model on Laegern test set
+laegern_mod_knn_across <- predict(davos_mod_knn, newdata = laegern_daily_fluxes_test |> drop_na())
+
+# Across-site predictions from Laegern model on Davos test set
+davos_mod_knn_across <- predict(laegern_mod_knn, newdata = davos_daily_fluxes_test |> drop_na())
+```
+

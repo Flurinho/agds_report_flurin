@@ -1,0 +1,89 @@
+---
+title: "re_stepwise"
+author: "Flurin"
+date: "2023-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 8.5 Report Exercise stepwise forward Regression
+
+```{r include=FALSE}
+#load necessary packages
+library(ggplot2)
+
+#load data into R as a csv
+half_hourly_fluxes <- readr::read_csv("./data/df_for_stepwise_regression.csv")
+
+#exploritary data analysis
+summary(half_hourly_fluxes)
+```
+
+## bivariate models (single predictor)
+
+```{r include=FALSE}
+#Regression for 1-3
+
+r_2_values <- c()
+for (predictor in predictors) {
+  formel <- formula(paste("GPP_NT_VUT_REF ~", predictor))
+  model <- lm(formel, data = half_hourly_fluxes)
+  summary_model <- summary(model)
+  print(summary_model)
+  r_squared <- summary_model$r.squared
+  r_2_values <- c(r_2_values, r_squared)
+  print(r_2_values)
+}
+
+```
+
+### evaluation
+
+```{r}
+best_r_2 <- which.max(r_2_values)
+best_name <- predictors[best_r_2]
+best_formel <- formula(paste("GPP_NT_VUT_REF ~", best_name))
+best_model <- lm(best_formel, data = half_hourly_fluxes)
+best_aic <- AIC(best_model)
+
+print(r_2_values)
+cat("lowest AIC:", best_aic,
+    "variable:", best_name)
+```
+
+## Implementation stepwise forward regression
+
+```{r}
+#Stepwise Linear Regression
+
+response <- half_hourly_fluxes$GPP_NT_VUT_REF
+factors <- c("TA_F","SW_IN_F","LW_IN_F","VPD_F","PA_F","P_F","WS_F","TA_F_MDS","SW_IN_F_MDS","LW_IN_F_MDS","VPD_F_MDS","CO2_F_MDS","PPFD_IN","GPP_NT_VUT_REF","USTAR")
+
+
+small_aic <- Inf
+best_modell <- NULL
+
+for(i in 1:14) {
+  combinations <- combn(factors, i)
+    print(combinations)
+  for (j in 1:ncol(combinations)){
+    formel_all_p <- formula(paste("GPP_NT_VUT_REF ~", paste(combinations)))
+    modell_lm <- lm(formel_all_p, data = half_hourly_fluxes)
+    aic <- AIC(modell_lm)
+    if( aic < small_aic){
+      small_aic <- aic
+      best_modell <- modell_lm
+    } else {
+      break
+    }
+  }
+}
+summary(best_modell)
+print(small_aic)
+print(best_modell)
+```
+
+### evaluation

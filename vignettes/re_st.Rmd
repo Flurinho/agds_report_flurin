@@ -1,0 +1,122 @@
+---
+title: "re_st"
+author: "Flurin"
+date: "2023-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 4.4 Report Exercise Telling a Story from Data
+
+In this Excercise I will research the Impact of Ozone on Temperature using the dataset Airquality which is directly available in R. My Hypotheses is that if there is more measured Ozone the Temperature is higher within a month. Airquality is a dataset containing daily air quality measurements from New York from the year 1973. It contains 153 observations on the 6 variables Ozone (measured in ppb), numeric Solar Radiation (measured in Langleys), Average Wind Speed (measured in miles per hour) and the Maximum daily Temperature (measured in Fahrenheit).
+
+```{r}
+# load dataframe airquality
+airqualityFahrenheit <- datasets::airquality
+# look at dataframe
+head(airquality)
+str(airquality)
+summary(airquality)
+?airquality
+
+#converts the Tempretures measured in Fahrenheit to Celsius and saves it in new Dataframe
+airquality <- airqualityFahrenheit |>
+  dplyr::mutate (Temp = ((Temp - 32)/1.8))
+```
+
+I choose the standart deviation, the maximum and the minimum as statistical metrics. First of all those metrics give a good overview of how the relevant data looks like and how its distributed. The temprature changed quite a lot, in the time span of mai to september but is still in a area that i would expect for New York . By looking at the mean, max and min of the Ozone concentration i see that the maximum concentration is quite an extreme since its much further away from the mean than the minimum number.
+
+```{r}
+mean(airquality$Ozone, na.rm = T)
+max(airquality$Ozone, na.rm = T)
+min(airquality$Ozone, na.rm = T)
+
+mean(airquality$Temp, na.rm = T)
+max(airquality$Temp, na.rm = T)
+min(airquality$Temp, na.rm = T)
+
+```
+
+I created the graphic presenting the changes in tempreture and ozone from mai to september with the following code.
+
+```{r}
+library(lubridate)
+library(ggplot2)
+#creates a new column in airquality with the dates 
+airquality <-airquality |>
+  dplyr::mutate("date" = make_date(year = 1973, month = airquality$Month, day = airquality$Day))
+#creates a new column with the day of year in airquality
+airquality <-airquality |>
+  dplyr::mutate("doy" = yday(airquality$date) )
+# creates a cartesian plot that shows the seasonal cycle of Ozone
+plot_1 <-ggplot2::ggplot(
+  data = airquality,
+  aes ( x = doy,
+       y =Ozone)) + 
+  geom_line() + 
+  labs(y = expression(paste("Ozone")),
+       x = "Day of year")
+# creates a cartesian plot that shows the seasonal cycle of the Tempreture
+plot_2 <- ggplot2::ggplot(
+  data = airquality,
+  aes ( x = doy,
+        y = Temp)) + 
+  geom_line() + 
+  labs(y = expression(paste("Temp")),
+       x = "Day of year")
+# combines the 2 plots 
+cowplot::plot_grid(plot_1, plot_2, ncol = 1)
+```
+
+By comparing the to graphics I see that my Hypotheses could be True. There is a clear positive correlation between the Temperature and the Ozone Concentration. The Maximum is in both graphics around Day of the Year 240 and the minimum around Day of the Year 140. Although it is interesting to see, that approximatly from day 170 until day 230, the Ozone Concentration changes quite fast and with big magnitude while the Temperature was relative constant.
+
+```{r}
+# Linear Regression by Month
+airquality_m <- airquality |>
+  dplyr::mutate(month = as.factor(Month))
+
+ggplot(
+  data = airquality_m,
+  aes(x = Ozone,
+      y = Temp, color = month))+
+  geom_point(alpha = 0.5) +
+  geom_smooth(formula = y ~ x + 0, method = "lm", se = FALSE) +
+  labs(x = expression(paste("Ozone (ppb)")), 
+       y = expression(paste("Temp (C°)"))) +
+  theme_classic()+
+  scico::scale_color_scico_d(palette = "bamako")
+
+
+
+```
+
+The Graphic above shows the linear regression by month between the Temperature and Ozone concentration and also a scatter plot. The lines created by `geom_smooth(formula = y ~ x + 0, method = "lm", se = FALSE)`
+
+have a positive gradient which means the correlation is positive. That supports my Hypotheses.
+
+```{r}
+# Outliers
+vec_outliers <- boxplot.stats(airquality$Ozone)$out
+
+plot_data <- airquality |> 
+  dplyr::mutate(outlier = Ozone %in% vec_outliers)
+
+plot_data |> 
+  ggplot(aes(x = Temp, y = Ozone, color = outlier)) + 
+  geom_point() + 
+  scale_color_manual("Outlier?",                    # Set title of legend
+                     values = c("black", "red"),    # Highlight in red
+                     labels= c("No", "Yes")        # Add labels to the legend
+  ) +
+  labs(x = expression(paste("Temperature (C°)")), 
+       y = expression(paste("Ozone (ppb)")) +
+  theme_classic())
+
+```
+
+In the Graphic above i've plotted the Ozone Concentration vs Temperature once again and defined Outliers. Here, Outliers are defined as those values of `Ozone` that fall outside (Q1−1.5(Q3−Q1) to Q3+1.5(Q3−Q1). We see that there are only 2 Outliers, all the other datapoints fall inside the main pointcloud. That is good news, because Outliers could affect further analysis or models in a disproportionate way.
+
+We have to be carfull with the interpretation of our Results. The Ozone Concentration measurements and Temperature measurments were not taken in measured in different places. The Ozone has been measured at Roosevelt Island and the Temperature at La Guardia Airport. Those places lay approximatly 8 km away from each other. Further the Solar Radiation and also Cloud Coverager are not included in the Analyses which both impact the Temperature. My Hypotheses that the Ozone Concentration and Temperature have a positive more or less linear Correlation is True. We got similar Results from comparing the data visually and also using the linear Regression. Although by looking at the scatterplot, I would say that the linear Regression Lines overestimate the positivy of the correlation and perhaps also the linearity.

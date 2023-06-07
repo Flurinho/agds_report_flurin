@@ -1,0 +1,90 @@
+---
+title: "3_5_data_wrangling"
+author: "Flurin"
+date: "2023-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Report Exercise Applied Geo Data Science FS23 UNIBE Flurin Joos
+
+## 3.5 Report Exercise Cleaning data from elevated CO2 experiments
+
+In this exercise we worked with the dataset "Database S1" from the Paper "Groenigen, Kees Jan van, Xuan Qi, Craig W. Osenberg, Yiqi Luo, and Bruce A. Hungate."Faster Decomposition Under Increased Atmospheric CO2 Limits Soil Carbon Storage." Science 344, no. 6183 (May 2, 2014): 508--9. <https://doi.org/10.1126/science.1249534>." The dataset contains data of soil organic measurements from different experiments.
+
+Firstly I cleaned the data inside Excel manually. This is not further elaborated here. Then I saved the Excel file as a CSV file and read it into R. To be able to read the CSV file in R i had to replace the Semicolons (;), that were defined by Excel as List Separator, with commas (,). I did this using the search and replace function in Windows Editor. Other possible Solutions like defining the List Separotor as a Semicolon inside of the R Studio interface ( using the function `sep= ;`), did not work.
+
+I loaded the tidyverse into the library, which were going to use in all the Exercises.
+
+```{r}
+library(tidyverse)
+```
+
+The following reads the CSV file that we previosly cleaned by hand, into R Studio and saved it as a dataframe with the name "database S1". Further the argument `col_names = TRUE` defines the first row as Collumnnames.
+
+```{r}
+database_S1 <- readr::read_csv("./data/1249534s1-s6_txt.csv",
+            col_names = TRUE)
+```
+
+First we want to calculate the log response ratio, which is the treatment effect on variable X, within each experiment. The function `aggregate` allow us to take the mean of the variables for each experiment. Yet it only takes the mean for numeric or integer variables. Variables with the class character are automatically replaced with NA.
+
+```{r}
+mean_experiment <- aggregate(database_S1,  
+                by = list(database_S1$Experiment),  
+                FUN = mean)
+```
+
+The following calculates the log response ratio for each Experiment. Here we use the pipe operator `|>`, which takes the object on its left side as the first argument of the function to the right side of it. We calculate the Log Response Ration using the means for each experiment, which we've just calculated. We Group them by "Group.1", which is a newly created column by the previous function and holds a copie of the Variable "Experiment"
+
+```{r}
+LRR_experiment <- mean_experiment |>  
+                      group_by(Group.1) |>   
+                      summarise ( RR = log( `increased CO2 in g C m-2 (mean)`/ `ambient CO2 in g C m-2  (mean)` ))
+```
+
+In the next step we aggregate data for different years since the start of the Experiment. We distinguish the Experiments in 3 diffferent phases. The early phase (\<3 years since start), the mid-phase (3-6 years since start), and the late phase (\>6 years since start). Then we calculate the Log Response-Ratios for each Phase.
+
+First we calculate the Log response Ratio for the early phase and then repeat the same functions for the other 2 phases. We select a dataframe "earlyphase" out of the dataframe "database_S1", which only includes the samples that are part of the previously definded earlyphase.
+
+```{r}
+earlyphase <- database_S1[database_S1[,"Time (years)"] >= 0 & database_S1[,"Time (years)"]<= 3,]
+```
+
+Then we calculate the Log Response Ratio for each sample that is part of the earlyphase. Again we use the pipe operator which has different advantages.
+
+```{r}
+LRR_03 <- earlyphase |>  
+                    group_by(`Time (years)`)  |>  
+                    summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))
+```
+
+In a last step we have to take the mean of every Sample\`s Log Response Ratio. Since the dataframe "LRR_03" has extra rows which are empty we have to make shure that objects with no value are ignored. We do this using the function `na.rm=TRUE`
+
+```{r}
+mean(LRR_03$RR, na.rm=TRUE)  # Log response Ratio early phase = 0.01504443
+```
+
+We repeat the same process with the midphase and latephase, only changing the samples selected and the names of the newly created dataframes.
+
+```{r}
+midphase <- database_S1[database_S1[,"Time (years)"] >= 3 & database_S1[,"Time (years)"]<= 6,]  
+
+LRR_36 <- midphase |>  
+  group_by(`Time (years)`)  |>  
+  summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))  
+
+mean(LRR_36$RR, na.rm = TRUE)  # Log response Ratio mid phase phase = 0.01723058
+
+latephase <- database_S1[database_S1[,"Time (years)"] >= 6,]  
+
+LRR_6 <- latephase |>  
+  group_by(`Time (years)`)  |>  
+  summarise( RR = log(`increased CO2 in g C m-2  (mean)`/ `ambient CO2 in g C m-2  (mean)`))  
+
+mean(LRR_6$RR, na.rm = TRUE)  # Log response Ratio late phase phase = -0.01990375```
+
+```

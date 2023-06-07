@@ -1,0 +1,67 @@
+---
+title: "Report Exercise Superwised Machine Learning 2"
+author: "Flurin"
+date: "2023-05-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load necesarry packages
+library(ggplot2)
+library(dbplyr)
+library(tidyr)
+library(caret)
+library(recipes)
+library(lubridate)
+
+#import data, convert to nice date object, set all -9999 to NA
+davos_daily_fluxes <- readr::read_csv("./FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")|>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  mutate(across(where(is.numeric), ~na_if(., -9999)))
+  
+laegern_daily_fluxes <- readr::read_csv("./FLX_CH-Lae_FLUXNET2015_FULLSET_DD_2004-2014_1-4.csv")|>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  mutate(across(where(is.numeric), ~na_if(., -9999)))
+```
+
+```{r}
+# Data splitting for Davos
+set.seed(112)  # for reproducibility
+davos_split <- rsample::initial_split(davos_daily_fluxes, prop = 0.8)
+davos_daily_fluxes_train <- rsample::training(davos_split)
+davos_daily_fluxes_test <- rsample::testing(davos_split)
+
+# Data splitting for Laegern
+set.seed(115)  # for reproducibility
+laegern_split <- rsample::initial_split(laegern_daily_fluxes, prop = 0.8)
+laegern_daily_fluxes_train <- rsample::training(laegern_split)
+laegern_daily_fluxes_test <- rsample::testing(laegern_split)
+```
+
+```{r}
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp_davos <- recipes::recipe(GPP_NT_VUT_REF ~. , 
+                      data = davos_daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+pp_laegern <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                            data = laegern_daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+```
+
+```{r}
+# Across-site predictions from Davos model on Laegern test set
+laegern_mod_knn_across <- predict(davos_mod_knn, newdata = laegern_daily_fluxes_test |> drop_na())
+
+# Across-site predictions from Laegern model on Davos test set
+davos_mod_knn_across <- predict(laegern_mod_knn, newdata = davos_daily_fluxes_test |> drop_na())
+```
+
